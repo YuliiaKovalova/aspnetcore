@@ -90,15 +90,12 @@ public partial class ForbidResult : ActionResult
     /// <inheritdoc />
     public override async Task ExecuteResultAsync(ActionContext context)
     {
-        if (context == null)
-        {
-            throw new ArgumentNullException(nameof(context));
-        }
+        ArgumentNullException.ThrowIfNull(context);
 
         var httpContext = context.HttpContext;
 
         var loggerFactory = httpContext.RequestServices.GetRequiredService<ILoggerFactory>();
-        var logger = loggerFactory.CreateLogger<ForbidResult>();
+        var logger = loggerFactory.CreateLogger(typeof(ForbidResult));
         Log.ForbidResultExecuting(logger, AuthenticationSchemes);
 
         if (AuthenticationSchemes != null && AuthenticationSchemes.Count > 0)

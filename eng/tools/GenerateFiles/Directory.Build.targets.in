@@ -29,13 +29,17 @@
   <ItemGroup>
     <!--
       Reference base shared framework at incoming dependency flow version, not bundled sdk version.
-      Apply this to all projects that target the default tfm (e.g. net7.0) or a rid-based variant of it (e.g. net7.0-windows)
+      Apply this to all projects that target the default tfm (e.g. net8.0) or a rid-based variant of it (e.g. net8.0-windows)
     -->
     <FrameworkReference
       Update="Microsoft.NETCore.App"
       Condition=" (('$(ProjectTargetFrameworkIdentifier)' == '${DefaultNetCoreTargetFramework}') AND '${DefaultNetCoreTargetFramework}' == '$(ProjectTargetFrameworkVersion)') AND '$(TargetLatestDotNetRuntime)' != 'false' "
       RuntimeFrameworkVersion="${MicrosoftNETCoreAppRuntimeVersion}"
       TargetingPackVersion="${MicrosoftNETCoreAppRefVersion}" />
+
+    <PackageReference Include="Microsoft.DotNet.ILCompiler"
+      Condition=" '$(PublishAot)' == 'true' "
+      Version="${MicrosoftNETCoreAppRuntimeVersion}" />
   </ItemGroup>
 
   <ItemGroup>
@@ -70,6 +74,11 @@
         Condition=" '%(TargetFramework)' == '${DefaultNetCoreTargetFramework}' ">${MicrosoftNETCoreAppRuntimeVersion}</LatestRuntimeFrameworkVersion>
       <AppHostRuntimeIdentifiers Condition=" '$(PortableBuild)' == 'false' ">$(TargetRuntimeIdentifier)</AppHostRuntimeIdentifiers>
     </KnownRuntimePack>
+
+    <KnownWebAssemblySdkPack Update="Microsoft.NET.Sdk.WebAssembly.Pack">
+      <WebAssemblySdkPackVersion
+        Condition=" '%(TargetFramework)' == '${DefaultNetCoreTargetFramework}' ">${MicrosoftNETCoreAppRuntimeVersion}</WebAssemblySdkPackVersion>
+    </KnownWebAssemblySdkPack>
 
     <KnownCrossgen2Pack Update="Microsoft.NETCore.App.Crossgen2" Condition=" '$(PortableBuild)' == 'false' ">
       <Crossgen2PackVersion
@@ -120,5 +129,19 @@
     <Error Text="Dotnet root location '$(_DotNetRoot)' does not exist." Condition=" !EXISTS('$(_DotNetRoot)') " />
     <Warning Text="Requested Microsoft.AspNetCore.App v${MicrosoftAspNetCoreAppRuntimeVersion} does not exist."
         Condition=" !EXISTS('$(_DotNetRoot)shared\Microsoft.AspNetCore.App\${MicrosoftAspNetCoreAppRuntimeVersion}') " />
+  </Target>
+
+  <!--
+    Make a netstandard2.1 copy of the .net ILLinkPack to work around a trimming issue.
+    See https://github.com/dotnet/linker/issues/3175
+  -->
+  <Target Name="_FixKnownILLinkPack"
+          BeforeTargets="ProcessFrameworkReferences">
+    <ItemGroup>
+      <KnownILLinkPack Include="@(KnownILLinkPack)"
+                       Condition="'%(TargetFramework)' == 'net7.0'"
+                       TargetFramework="netstandard2.1"
+                       ILLinkPackVersion="%(KnownILLinkPack.ILLinkPackVersion)" />
+    </ItemGroup>
   </Target>
 </Project>

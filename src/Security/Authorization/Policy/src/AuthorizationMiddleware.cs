@@ -10,6 +10,17 @@ using Microsoft.Extensions.Logging;
 
 namespace Microsoft.AspNetCore.Authorization;
 
+// This middleware exists to force the correct constructor overload to be called when the user calls UseAuthorization().
+// Since we already expose the AuthorizationMiddleware type, we can't change the constructor signature without breaking it.
+internal sealed class AuthorizationMiddlewareInternal(
+    RequestDelegate next,
+    IServiceProvider services,
+    IAuthorizationPolicyProvider policyProvider,
+    ILogger<AuthorizationMiddleware> logger) : AuthorizationMiddleware(next, policyProvider, services, logger)
+{
+
+}
+
 /// <summary>
 /// A middleware that enables authorization capabilities.
 /// </summary>
@@ -81,10 +92,7 @@ public class AuthorizationMiddleware
     /// <param name="context">The <see cref="HttpContext"/>.</param>
     public async Task Invoke(HttpContext context)
     {
-        if (context == null)
-        {
-            throw new ArgumentNullException(nameof(context));
-        }
+        ArgumentNullException.ThrowIfNull(context);
 
         var endpoint = context.GetEndpoint();
         if (endpoint != null)
@@ -110,6 +118,24 @@ public class AuthorizationMiddleware
             var policies = endpoint?.Metadata.GetOrderedMetadata<AuthorizationPolicy>() ?? Array.Empty<AuthorizationPolicy>();
 
             policy = await AuthorizationPolicy.CombineAsync(_policyProvider, authorizeData, policies);
+
+            var requirementData = endpoint?.Metadata?.GetOrderedMetadata<IAuthorizationRequirementData>() ?? Array.Empty<IAuthorizationRequirementData>();
+            if (requirementData.Count > 0)
+            {
+                var reqPolicy = new AuthorizationPolicyBuilder();
+                foreach (var rd in requirementData)
+                {
+                    foreach (var r in rd.GetRequirements())
+                    {
+                        reqPolicy.AddRequirements(r);
+                    }
+                }
+
+                // Combine policy with requirements or just use requirements if no policy
+                policy = (policy is null)
+                    ? reqPolicy.Build()
+                    : AuthorizationPolicy.Combine(policy, reqPolicy.Build());
+            }
 
             // Cache the computed policy
             if (policy != null && canCachePolicy)
@@ -149,9 +175,9 @@ public class AuthorizationMiddleware
             return;
         }
 
-        if (authenticateResult != null && !authenticateResult.Succeeded)
+        if (authenticateResult != null && !authenticateResult.Succeeded && _logger is ILogger log && log.IsEnabled(LogLevel.Debug))
         {
-            _logger?.LogDebug("Policy authentication schemes {policyName} did not succeed", String.Join(", ", policy.AuthenticationSchemes));
+            log.LogDebug("Policy authentication schemes {policyName} did not succeed", String.Join(", ", policy.AuthenticationSchemes));
         }
 
         object? resource;

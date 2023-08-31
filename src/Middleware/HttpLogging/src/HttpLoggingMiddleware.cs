@@ -28,18 +28,11 @@ internal sealed class HttpLoggingMiddleware
     /// <param name="logger"></param>
     public HttpLoggingMiddleware(RequestDelegate next, IOptionsMonitor<HttpLoggingOptions> options, ILogger<HttpLoggingMiddleware> logger)
     {
-        _next = next ?? throw new ArgumentNullException(nameof(next));
+        ArgumentNullException.ThrowIfNull(next);
+        ArgumentNullException.ThrowIfNull(options);
+        ArgumentNullException.ThrowIfNull(logger);
 
-        if (options == null)
-        {
-            throw new ArgumentNullException(nameof(options));
-        }
-
-        if (logger == null)
-        {
-            throw new ArgumentNullException(nameof(logger));
-        }
-
+        _next = next;
         _options = options;
         _logger = logger;
     }
@@ -66,44 +59,47 @@ internal sealed class HttpLoggingMiddleware
         RequestBufferingStream? requestBufferingStream = null;
         Stream? originalBody = null;
 
-        if ((HttpLoggingFields.Request & options.LoggingFields) != HttpLoggingFields.None)
+        var loggingAttribute = context.GetEndpoint()?.Metadata.GetMetadata<HttpLoggingAttribute>();
+        var loggingFields = loggingAttribute?.LoggingFields ?? options.LoggingFields;
+
+        if ((HttpLoggingFields.Request & loggingFields) != HttpLoggingFields.None)
         {
             var request = context.Request;
             var list = new List<KeyValuePair<string, object?>>(
                 request.Headers.Count + DefaultRequestFieldsMinusHeaders);
 
-            if (options.LoggingFields.HasFlag(HttpLoggingFields.RequestProtocol))
+            if (loggingFields.HasFlag(HttpLoggingFields.RequestProtocol))
             {
                 AddToList(list, nameof(request.Protocol), request.Protocol);
             }
 
-            if (options.LoggingFields.HasFlag(HttpLoggingFields.RequestMethod))
+            if (loggingFields.HasFlag(HttpLoggingFields.RequestMethod))
             {
                 AddToList(list, nameof(request.Method), request.Method);
             }
 
-            if (options.LoggingFields.HasFlag(HttpLoggingFields.RequestScheme))
+            if (loggingFields.HasFlag(HttpLoggingFields.RequestScheme))
             {
                 AddToList(list, nameof(request.Scheme), request.Scheme);
             }
 
-            if (options.LoggingFields.HasFlag(HttpLoggingFields.RequestPath))
+            if (loggingFields.HasFlag(HttpLoggingFields.RequestPath))
             {
                 AddToList(list, nameof(request.PathBase), request.PathBase);
                 AddToList(list, nameof(request.Path), request.Path);
             }
 
-            if (options.LoggingFields.HasFlag(HttpLoggingFields.RequestQuery))
+            if (loggingFields.HasFlag(HttpLoggingFields.RequestQuery))
             {
                 AddToList(list, nameof(request.QueryString), request.QueryString.Value);
             }
 
-            if (options.LoggingFields.HasFlag(HttpLoggingFields.RequestHeaders))
+            if (loggingFields.HasFlag(HttpLoggingFields.RequestHeaders))
             {
                 FilterHeaders(list, request.Headers, options._internalRequestHeaders);
             }
 
-            if (options.LoggingFields.HasFlag(HttpLoggingFields.RequestBody))
+            if (loggingFields.HasFlag(HttpLoggingFields.RequestBody))
             {
                 if (request.ContentType is null)
                 {
@@ -113,10 +109,16 @@ internal sealed class HttpLoggingMiddleware
                     options.MediaTypeOptions.MediaTypeStates,
                     out var encoding))
                 {
+                    var requestBodyLogLimit = options.RequestBodyLogLimit;
+                    if (loggingAttribute?.IsRequestBodyLogLimitSet is true)
+                    {
+                        requestBodyLogLimit = loggingAttribute.RequestBodyLogLimit;
+                    }
+
                     originalBody = request.Body;
                     requestBufferingStream = new RequestBufferingStream(
                         request.Body,
-                        options.RequestBodyLogLimit,
+                        requestBodyLogLimit,
                         _logger,
                         encoding);
                     request.Body = requestBufferingStream;
@@ -142,29 +144,36 @@ internal sealed class HttpLoggingMiddleware
         {
             var response = context.Response;
 
-            if (options.LoggingFields.HasFlag(HttpLoggingFields.ResponseStatusCode) || options.LoggingFields.HasFlag(HttpLoggingFields.ResponseHeaders))
+            if (loggingFields.HasFlag(HttpLoggingFields.ResponseStatusCode) || loggingFields.HasFlag(HttpLoggingFields.ResponseHeaders))
             {
                 originalUpgradeFeature = context.Features.Get<IHttpUpgradeFeature>();
 
                 if (originalUpgradeFeature != null && originalUpgradeFeature.IsUpgradableRequest)
                 {
-                    loggableUpgradeFeature = new UpgradeFeatureLoggingDecorator(originalUpgradeFeature, response, options, _logger);
+                    loggableUpgradeFeature = new UpgradeFeatureLoggingDecorator(originalUpgradeFeature, response, options._internalResponseHeaders, loggingFields, _logger);
 
                     context.Features.Set<IHttpUpgradeFeature>(loggableUpgradeFeature);
                 }
             }
 
-            if (options.LoggingFields.HasFlag(HttpLoggingFields.ResponseBody))
+            if (loggingFields.HasFlag(HttpLoggingFields.ResponseBody))
             {
                 originalBodyFeature = context.Features.Get<IHttpResponseBodyFeature>()!;
 
+                var responseBodyLogLimit = options.ResponseBodyLogLimit;
+                if (loggingAttribute?.IsRequestBodyLogLimitSet is true)
+                {
+                    responseBodyLogLimit = loggingAttribute.ResponseBodyLogLimit;
+                }
+
                 // TODO pool these.
                 responseBufferingStream = new ResponseBufferingStream(originalBodyFeature,
-                    options.ResponseBodyLogLimit,
+                    responseBodyLogLimit,
                     _logger,
                     context,
                     options.MediaTypeOptions.MediaTypeStates,
-                    options);
+                    options._internalResponseHeaders,
+                    loggingFields);
                 response.Body = responseBufferingStream;
                 context.Features.Set<IHttpResponseBodyFeature>(responseBufferingStream);
             }
@@ -180,8 +189,8 @@ internal sealed class HttpLoggingMiddleware
 
             if (ResponseHeadersNotYetWritten(responseBufferingStream, loggableUpgradeFeature))
             {
-                // No body, not an upgradable request or request not upgraded, write headers here. 
-                LogResponseHeaders(response, options, _logger);
+                // No body, not an upgradable request or request not upgraded, write headers here.
+                LogResponseHeaders(response, loggingFields, options._internalResponseHeaders, _logger);
             }
 
             if (responseBufferingStream != null)
@@ -223,7 +232,7 @@ internal sealed class HttpLoggingMiddleware
 
     private static bool BodyNotYetWritten(ResponseBufferingStream? responseBufferingStream)
     {
-        return responseBufferingStream == null || responseBufferingStream.FirstWrite == false;
+        return responseBufferingStream == null || responseBufferingStream.HeadersWritten == false;
     }
 
     private static bool NotUpgradeableRequestOrRequestNotUpgraded(UpgradeFeatureLoggingDecorator? upgradeFeatureLogging)
@@ -236,19 +245,19 @@ internal sealed class HttpLoggingMiddleware
         list.Add(new KeyValuePair<string, object?>(key, value));
     }
 
-    public static void LogResponseHeaders(HttpResponse response, HttpLoggingOptions options, ILogger logger)
+    public static void LogResponseHeaders(HttpResponse response, HttpLoggingFields loggingFields, HashSet<string> allowedResponseHeaders, ILogger logger)
     {
         var list = new List<KeyValuePair<string, object?>>(
             response.Headers.Count + DefaultResponseFieldsMinusHeaders);
 
-        if (options.LoggingFields.HasFlag(HttpLoggingFields.ResponseStatusCode))
+        if (loggingFields.HasFlag(HttpLoggingFields.ResponseStatusCode))
         {
             list.Add(new KeyValuePair<string, object?>(nameof(response.StatusCode), response.StatusCode));
         }
 
-        if (options.LoggingFields.HasFlag(HttpLoggingFields.ResponseHeaders))
+        if (loggingFields.HasFlag(HttpLoggingFields.ResponseHeaders))
         {
-            FilterHeaders(list, response.Headers, options._internalResponseHeaders);
+            FilterHeaders(list, response.Headers, allowedResponseHeaders);
         }
 
         if (list.Count > 0)

@@ -47,6 +47,7 @@
     <Reference Include="Microsoft.AspNetCore.Hosting.Abstractions" />
     <Reference Include="Microsoft.AspNetCore.Http.Extensions" />
     <Reference Include="Microsoft.AspNetCore.Http.Features" />
+    <Reference Include="Microsoft.AspNetCore.Server.HttpSys" />
     <Reference Include="Microsoft.Extensions.FileProviders.Physical" />
     <Reference Include="System.IO.Pipelines" />
   </ItemGroup>
@@ -72,4 +73,9 @@
       <None Include="%(InProcessComponents.DllLocation)" CopyToPublishDirectory="PreserveNewest" CopyToOutputDirectory="PreserveNewest" Condition="Exists('%(InProcessComponents.DllLocation)')" Link="%(InProcessComponents.Platform)\%(InProcessComponents.NativeAsset).dll" />
     </ItemGroup>
   </Target>
+
+  <ItemGroup>
+    <InternalsVisibleTo Include="Microsoft.AspNetCore.Server.IISIntegration.Tests" />
+    <InternalsVisibleTo Include="IIS.Tests" />
+  </ItemGroup>
 </Project>

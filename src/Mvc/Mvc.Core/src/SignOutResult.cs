@@ -89,10 +89,7 @@ public partial class SignOutResult : ActionResult, IResult
     /// <inheritdoc />
     public override Task ExecuteResultAsync(ActionContext context)
     {
-        if (context == null)
-        {
-            throw new ArgumentNullException(nameof(context));
-        }
+        ArgumentNullException.ThrowIfNull(context);
 
         return ExecuteAsync(context.HttpContext);
     }
@@ -114,7 +111,7 @@ public partial class SignOutResult : ActionResult, IResult
         }
 
         var loggerFactory = httpContext.RequestServices.GetRequiredService<ILoggerFactory>();
-        var logger = loggerFactory.CreateLogger<SignOutResult>();
+        var logger = loggerFactory.CreateLogger(typeof(SignOutResult));
         Log.SignOutResultExecuting(logger, AuthenticationSchemes);
 
         if (AuthenticationSchemes.Count == 0)

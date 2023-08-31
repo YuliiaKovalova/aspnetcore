@@ -1,2 +1,5 @@
 #nullable enable
-static Microsoft.AspNetCore.Components.Forms.EditContextDataAnnotationsExtensions.EnableDataAnnotationsValidation(this Microsoft.AspNetCore.Components.Forms.EditContext! editContext, System.IServiceProvider! serviceProvider) -> System.IDisposable!
+Microsoft.AspNetCore.Components.Forms.EditContext.ShouldUseFieldIdentifiers.get -> bool
+Microsoft.AspNetCore.Components.Forms.EditContext.ShouldUseFieldIdentifiers.set -> void
+Microsoft.AspNetCore.Components.Forms.EditContext.IsValid(in Microsoft.AspNetCore.Components.Forms.FieldIdentifier fieldIdentifier) -> bool
+Microsoft.AspNetCore.Components.Forms.EditContext.IsValid(System.Linq.Expressions.Expression<System.Func<object!>!>! accessor) -> bool

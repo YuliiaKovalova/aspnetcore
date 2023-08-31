@@ -28,6 +28,7 @@ public class IISDeployer : IISDeployerBase
     private string _configPath;
     private string _applicationHostConfig;
     private string _debugLogFile;
+    private string _appPoolName;
     private bool _disposed;
 
     public Process HostProcess { get; set; }
@@ -109,6 +110,8 @@ public class IISDeployer : IISDeployerBase
             var uri = TestUriHelper.BuildTestUri(ServerType.IIS, DeploymentParameters.ApplicationBaseUriHint);
             StartIIS(uri, contentRoot);
 
+            IISDeploymentParameters.ServerConfigLocation = Path.Combine(@"C:\inetpub\temp\apppools", _appPoolName, $"{_appPoolName}.config");
+
             // Warm up time for IIS setup.
             Logger.LogInformation("Successfully finished IIS application directory setup.");
             return Task.FromResult<DeploymentResult>(new IISDeploymentResult(
@@ -117,7 +120,8 @@ public class IISDeployer : IISDeployerBase
                 applicationBaseUri: uri.ToString(),
                 contentRoot: contentRoot,
                 hostShutdownToken: _hostShutdownToken.Token,
-                hostProcess: HostProcess
+                hostProcess: HostProcess,
+                appPoolName: _appPoolName
             ));
         }
     }
@@ -158,14 +162,14 @@ public class IISDeployer : IISDeployerBase
         {
             // Handle cases where debug file is redirected by test
             var debugLogLocations = new List<string>();
-            if (IISDeploymentParameters.HandlerSettings.ContainsKey("debugFile"))
+            if (IISDeploymentParameters.HandlerSettings.TryGetValue("debugFile", out var debugFile))
             {
-                debugLogLocations.Add(IISDeploymentParameters.HandlerSettings["debugFile"]);
+                debugLogLocations.Add(debugFile);
             }
 
-            if (DeploymentParameters.EnvironmentVariables.ContainsKey("ASPNETCORE_MODULE_DEBUG_FILE"))
+            if (DeploymentParameters.EnvironmentVariables.TryGetValue("ASPNETCORE_MODULE_DEBUG_FILE", out debugFile))
             {
-                debugLogLocations.Add(DeploymentParameters.EnvironmentVariables["ASPNETCORE_MODULE_DEBUG_FILE"]);
+                debugLogLocations.Add(debugFile);
             }
 
             // default debug file name
@@ -239,6 +243,8 @@ public class IISDeployer : IISDeployerBase
         RetryServerManagerAction(serverManager =>
         {
             var site = FindSite(serverManager, contentRoot);
+            IISDeploymentParameters.SiteName = site.Name;
+
             if (site == null)
             {
                 PreserveConfigFiles("nositetostart");
@@ -246,6 +252,7 @@ public class IISDeployer : IISDeployerBase
             }
 
             var appPool = serverManager.ApplicationPools.Single();
+            _appPoolName = appPool.Name;
             if (appPool.State != ObjectState.Started && appPool.State != ObjectState.Starting)
             {
                 var state = appPool.Start();
@@ -397,7 +404,7 @@ public class IISDeployer : IISDeployerBase
                         Logger.LogInformation($"Stopping pool, state: {state}");
                     }
                 }
-                
+
                 // Make sure all sites are stopped
                 foreach (var site in serverManager.Sites)
                 {
@@ -500,7 +507,7 @@ public class IISDeployer : IISDeployerBase
 
     private void PreserveConfigFiles(string fileNamePrefix)
     {
-        HelixHelper.PreserveFile(Path.Combine(DeploymentParameters.PublishedApplicationRootPath, "web.config"), fileNamePrefix+".web.config");
+        HelixHelper.PreserveFile(Path.Combine(DeploymentParameters.PublishedApplicationRootPath, "web.config"), fileNamePrefix + ".web.config");
         HelixHelper.PreserveFile(Path.Combine(_configPath, "applicationHost.config"), fileNamePrefix + ".applicationHost.config");
         HelixHelper.PreserveFile(Path.Combine(Environment.SystemDirectory, @"inetsrv\config\ApplicationHost.config"), fileNamePrefix + ".inetsrv.applicationHost.config");
         HelixHelper.PreserveFile(Path.Combine(Environment.SystemDirectory, @"inetsrv\config\redirection.config"), fileNamePrefix + ".inetsrv.redirection.config");

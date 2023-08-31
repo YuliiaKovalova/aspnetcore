@@ -79,18 +79,31 @@ internal sealed class HubMethodDescriptor
                 HasSyntheticArguments = true;
                 return false;
             }
-            else if (p.CustomAttributes.Any(a => typeof(IFromServiceMetadata).IsAssignableFrom(a.AttributeType)) ||
-                serviceProviderIsService?.IsService(p.ParameterType) == true)
+            else if (p.CustomAttributes.Any())
             {
-                if (index >= 64)
+                foreach (var attribute in p.GetCustomAttributes(true))
                 {
-                    throw new InvalidOperationException(
-                        "Hub methods can't use services from DI in the parameters after the 64th parameter.");
+                    if (attribute is IFromServiceMetadata)
+                    {
+                        return MarkServiceParameter(index);
+                    }
+                    else if (attribute is FromKeyedServicesAttribute keyedServicesAttribute)
+                    {
+                        if (serviceProviderIsService is IServiceProviderIsKeyedService keyedServiceProvider &&
+                            keyedServiceProvider.IsKeyedService(GetServiceType(p.ParameterType), keyedServicesAttribute.Key))
+                        {
+                            KeyedServiceKeys ??= new List<(int, object)>();
+                            KeyedServiceKeys.Add((index, keyedServicesAttribute.Key));
+                            return MarkServiceParameter(index);
+                        }
+                    }
                 }
-                _isServiceArgument |= (1UL << index);
-                HasSyntheticArguments = true;
-                return false;
             }
+            else if (serviceProviderIsService?.IsService(GetServiceType(p.ParameterType)) == true)
+            {
+                return MarkServiceParameter(index);
+            }
+
             return true;
         }).Select(p => p.ParameterType).ToArray();
 
@@ -102,7 +115,21 @@ internal sealed class HubMethodDescriptor
         Policies = policies.ToArray();
     }
 
+    private bool MarkServiceParameter(int index)
+    {
+        if (index >= 64)
+        {
+            throw new InvalidOperationException(
+                "Hub methods can't use services from DI in the parameters after the 64th parameter.");
+        }
+        _isServiceArgument |= (1UL << index);
+        HasSyntheticArguments = true;
+        return false;
+    }
+
     public List<Type>? StreamingParameters { get; private set; }
+
+    public List<(int, object)>? KeyedServiceKeys { get; private set; }
 
     public ObjectMethodExecutor MethodExecutor { get; }
 
@@ -123,6 +150,26 @@ internal sealed class HubMethodDescriptor
     public bool IsServiceArgument(int argumentIndex)
     {
         return (_isServiceArgument & (1UL << argumentIndex)) != 0;
+    }
+
+    public object GetService(IServiceProvider serviceProvider, int index, Type parameterType)
+    {
+        if (KeyedServiceKeys is not null)
+        {
+            foreach (var (paramIndex, key) in KeyedServiceKeys)
+            {
+                if (paramIndex == index)
+                {
+                    return serviceProvider.GetRequiredKeyedService(parameterType, key);
+                }
+                else if (paramIndex > index)
+                {
+                    break;
+                }
+            }
+        }
+
+        return serviceProvider.GetRequiredService(parameterType);
     }
 
     public IAsyncEnumerator<object> FromReturnedStream(object stream, CancellationToken cancellationToken)
@@ -159,5 +206,19 @@ internal sealed class HubMethodDescriptor
         var methodCall = Expression.Call(null, genericMethodInfo, methodArguments);
         var lambda = Expression.Lambda<Func<object, CancellationToken, IAsyncEnumerator<object>>>(methodCall, parameters);
         return lambda.Compile();
+    }
+
+    private static Type GetServiceType(Type type)
+    {
+        // IServiceProviderIsService will special case IEnumerable<> and always return true
+        // so, in this case checking the element type instead
+        if (type.IsConstructedGenericType &&
+            type.GetGenericTypeDefinition() is Type genericDefinition &&
+            genericDefinition == typeof(IEnumerable<>))
+        {
+            return type.GenericTypeArguments[0];
+        }
+
+        return type;
     }
 }

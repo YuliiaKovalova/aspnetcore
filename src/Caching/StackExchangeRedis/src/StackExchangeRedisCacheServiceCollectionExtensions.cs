@@ -2,8 +2,10 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 using System;
+using Microsoft.AspNetCore.Shared;
 using Microsoft.Extensions.Caching.Distributed;
 using Microsoft.Extensions.Caching.StackExchangeRedis;
+using Microsoft.Extensions.DependencyInjection.Extensions;
 
 namespace Microsoft.Extensions.DependencyInjection;
 
@@ -21,15 +23,8 @@ public static class StackExchangeRedisCacheServiceCollectionExtensions
     /// <returns>The <see cref="IServiceCollection"/> so that additional calls can be chained.</returns>
     public static IServiceCollection AddStackExchangeRedisCache(this IServiceCollection services, Action<RedisCacheOptions> setupAction)
     {
-        if (services == null)
-        {
-            throw new ArgumentNullException(nameof(services));
-        }
-
-        if (setupAction == null)
-        {
-            throw new ArgumentNullException(nameof(setupAction));
-        }
+        ArgumentNullThrowHelper.ThrowIfNull(services);
+        ArgumentNullThrowHelper.ThrowIfNull(setupAction);
 
         services.AddOptions();
 
@@ -38,4 +33,29 @@ public static class StackExchangeRedisCacheServiceCollectionExtensions
 
         return services;
     }
+
+#if NET7_0_OR_GREATER
+    /// <summary>
+    /// Adds Redis distributed caching services to the specified <see cref="IServiceCollection" />.
+    /// </summary>
+    /// <param name="services">The <see cref="IServiceCollection" /> to add services to.</param>
+    /// <param name="setupAction">An <see cref="Action{RedisCacheOptions}"/> to configure the provided
+    /// <see cref="RedisCacheOptions"/>.</param>
+    /// <returns>The <see cref="IServiceCollection"/> so that additional calls can be chained.</returns>
+    public static IServiceCollection AddStackExchangeRedisOutputCache(this IServiceCollection services, Action<RedisCacheOptions> setupAction)
+    {
+        ArgumentNullThrowHelper.ThrowIfNull(services);
+        ArgumentNullThrowHelper.ThrowIfNull(setupAction);
+
+        services.AddOptions();
+
+        services.Configure(setupAction);
+        // replace here (Add vs TryAdd) is intentional and part of test conditions
+        // long-form name qualification is because of the #if conditional; we'd need a matchin #if around
+        // a using directive, which is messy
+        services.AddSingleton<AspNetCore.OutputCaching.IOutputCacheStore, RedisOutputCacheStoreImpl>();
+
+        return services;
+    }
+#endif
 }

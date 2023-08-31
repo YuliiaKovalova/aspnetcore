@@ -1,2 +1,3 @@
 #nullable enable
-Microsoft.AspNetCore.Builder.ConnectionEndpointRouteBuilder.Finally(System.Action<Microsoft.AspNetCore.Builder.EndpointBuilder!>! finalConvention) -> void
+Microsoft.AspNetCore.Http.Connections.HttpConnectionDispatcherOptions.AllowStatefulReconnects.get -> bool
+Microsoft.AspNetCore.Http.Connections.HttpConnectionDispatcherOptions.AllowStatefulReconnects.set -> void

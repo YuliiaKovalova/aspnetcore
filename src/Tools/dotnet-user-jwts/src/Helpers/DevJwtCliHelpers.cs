@@ -25,26 +25,10 @@ internal static class DevJwtCliHelpers
         return id;
     }
 
-    public static string GetProject(string projectPath = null)
-    {
-        if (projectPath is not null)
-        {
-            return projectPath;
-        }
-
-        var csprojFiles = Directory.EnumerateFileSystemEntries(Directory.GetCurrentDirectory(), "*.*proj", SearchOption.TopDirectoryOnly)
-                .Where(f => !".xproj".Equals(Path.GetExtension(f), StringComparison.OrdinalIgnoreCase))
-                .ToList();
-        if (csprojFiles is [var path])
-        {
-            return path;
-        }
-        return null;
-    }
-
     public static bool GetProjectAndSecretsId(string projectPath, IReporter reporter, out string project, out string userSecretsId)
     {
-        project = GetProject(projectPath);
+        var finder = new MsBuildProjectFinder(projectPath ?? Directory.GetCurrentDirectory());
+        project = finder.FindMsBuildProject(projectPath);
         userSecretsId = null;
         if (project == null)
         {
@@ -143,48 +127,70 @@ internal static class DevJwtCliHelpers
         }
     }
 
-    public static void PrintJwt(IReporter reporter, Jwt jwt, bool showAll, JwtSecurityToken fullToken = null)
+    public static void PrintJwt(IReporter reporter, Jwt jwt, bool showAll, string outputFormat, JwtSecurityToken fullToken = null)
     {
-        reporter.Output($"{Resources.JwtPrint_Id}: {jwt.Id}");
-        reporter.Output($"{Resources.JwtPrint_Name}: {jwt.Name}");
-        reporter.Output($"{Resources.JwtPrint_Scheme}: {jwt.Scheme}");
-        reporter.Output($"{Resources.JwtPrint_Audiences}: {jwt.Audience}");
-        reporter.Output($"{Resources.JwtPrint_NotBefore}: {jwt.NotBefore:O}");
-        reporter.Output($"{Resources.JwtPrint_ExpiresOn}: {jwt.Expires:O}");
-        reporter.Output($"{Resources.JwtPrint_IssuedOn}: {jwt.Issued:O}");
-
-        if (!jwt.Scopes.IsNullOrEmpty() || showAll)
+        switch (outputFormat)
         {
-            var scopesValue = jwt.Scopes.IsNullOrEmpty()
-                ? "none"
-                : string.Join(", ", jwt.Scopes);
-            reporter.Output($"{Resources.JwtPrint_Scopes}: {scopesValue}");
+            case "token":
+                reporter.Output(fullToken is not null ? jwt.Token : string.Empty);
+                break;
+            case "json":
+                PrintJwtJson(reporter, jwt, showAll, fullToken);
+                break;
+            default:
+                PrintJwtDefault(reporter, jwt, showAll, fullToken);
+                break;
         }
 
-        if (!jwt.Roles.IsNullOrEmpty() || showAll)
+        static void PrintJwtJson(IReporter reporter, Jwt jwt, bool showAll, JwtSecurityToken fullToken)
         {
-            var rolesValue = jwt.Roles.IsNullOrEmpty()
-                ? "none"
-                : string.Join(", ", jwt.Roles);
-            reporter.Output($"{Resources.JwtPrint_Roles}: [{rolesValue}]");
+            reporter.Output(JsonSerializer.Serialize(jwt, new JsonSerializerOptions { WriteIndented = true }));
         }
 
-        if (!jwt.CustomClaims.IsNullOrEmpty() || showAll)
+        static void PrintJwtDefault(IReporter reporter, Jwt jwt, bool showAll, JwtSecurityToken fullToken)
         {
-            var customClaimsValue = jwt.CustomClaims.IsNullOrEmpty()
-                ? "none"
-                : string.Join(", ", jwt.CustomClaims.Select(kvp => $"{kvp.Key}={kvp.Value}"));
-            reporter.Output($"{Resources.JwtPrint_CustomClaims}: [{customClaimsValue}]");
-        }
+            reporter.Output(Resources.FormatPrintCommand_Confirmed(jwt.Id));
+            reporter.Output($"{Resources.JwtPrint_Id}: {jwt.Id}");
+            reporter.Output($"{Resources.JwtPrint_Name}: {jwt.Name}");
+            reporter.Output($"{Resources.JwtPrint_Scheme}: {jwt.Scheme}");
+            reporter.Output($"{Resources.JwtPrint_Audiences}: {jwt.Audience}");
+            reporter.Output($"{Resources.JwtPrint_NotBefore}: {jwt.NotBefore:O}");
+            reporter.Output($"{Resources.JwtPrint_ExpiresOn}: {jwt.Expires:O}");
+            reporter.Output($"{Resources.JwtPrint_IssuedOn}: {jwt.Issued:O}");
 
-        if (showAll)
-        {
-            reporter.Output($"{Resources.JwtPrint_TokenHeader}: {fullToken.Header.SerializeToJson()}");
-            reporter.Output($"{Resources.JwtPrint_TokenPayload}: {fullToken.Payload.SerializeToJson()}");
-        }
+            if (!jwt.Scopes.IsNullOrEmpty() || showAll)
+            {
+                var scopesValue = jwt.Scopes.IsNullOrEmpty()
+                    ? "none"
+                    : string.Join(", ", jwt.Scopes);
+                reporter.Output($"{Resources.JwtPrint_Scopes}: {scopesValue}");
+            }
 
-        var tokenValueFieldName = showAll ? Resources.JwtPrint_CompactToken : Resources.JwtPrint_Token;
-        reporter.Output($"{tokenValueFieldName}: {jwt.Token}");
+            if (!jwt.Roles.IsNullOrEmpty() || showAll)
+            {
+                var rolesValue = jwt.Roles.IsNullOrEmpty()
+                    ? "none"
+                    : string.Join(", ", jwt.Roles);
+                reporter.Output($"{Resources.JwtPrint_Roles}: [{rolesValue}]");
+            }
+
+            if (!jwt.CustomClaims.IsNullOrEmpty() || showAll)
+            {
+                var customClaimsValue = jwt.CustomClaims.IsNullOrEmpty()
+                    ? "none"
+                    : string.Join(", ", jwt.CustomClaims.Select(kvp => $"{kvp.Key}={kvp.Value}"));
+                reporter.Output($"{Resources.JwtPrint_CustomClaims}: [{customClaimsValue}]");
+            }
+
+            if (showAll)
+            {
+                reporter.Output($"{Resources.JwtPrint_TokenHeader}: {fullToken.Header.SerializeToJson()}");
+                reporter.Output($"{Resources.JwtPrint_TokenPayload}: {fullToken.Payload.SerializeToJson()}");
+            }
+
+            var tokenValueFieldName = showAll ? Resources.JwtPrint_CompactToken : Resources.JwtPrint_Token;
+            reporter.Output($"{tokenValueFieldName}: {jwt.Token}");
+        }
     }
 
     public static bool TryParseClaims(List<string> input, out Dictionary<string, string> claims)

@@ -10,6 +10,7 @@ using System.Net.Http.Headers;
 using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.AspNetCore.Connections;
+using Microsoft.AspNetCore.Shared;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
 
@@ -25,6 +26,7 @@ internal sealed partial class ServerSentEventsTransport : ITransport
     private readonly CancellationTokenSource _transportCts = new CancellationTokenSource();
     private readonly CancellationTokenSource _inputCts = new CancellationTokenSource();
     private readonly ServerSentEventsMessageParser _parser = new ServerSentEventsMessageParser();
+    private readonly bool _useAck;
     private IDuplexPipe? _transport;
     private IDuplexPipe? _application;
 
@@ -34,13 +36,11 @@ internal sealed partial class ServerSentEventsTransport : ITransport
 
     public PipeWriter Output => _transport!.Output;
 
-    public ServerSentEventsTransport(HttpClient httpClient, HttpConnectionOptions? httpConnectionOptions = null, ILoggerFactory? loggerFactory = null)
+    public ServerSentEventsTransport(HttpClient httpClient, HttpConnectionOptions? httpConnectionOptions = null, ILoggerFactory? loggerFactory = null, bool useAck = false)
     {
-        if (httpClient == null)
-        {
-            throw new ArgumentNullException(nameof(httpClient));
-        }
+        ArgumentNullThrowHelper.ThrowIfNull(httpClient);
 
+        _useAck = useAck;
         _httpClient = httpClient;
         _logger = (loggerFactory ?? NullLoggerFactory.Instance).CreateLogger<ServerSentEventsTransport>();
         _httpConnectionOptions = httpConnectionOptions ?? new();
@@ -55,12 +55,7 @@ internal sealed partial class ServerSentEventsTransport : ITransport
 
         Log.StartTransport(_logger, transferFormat);
 
-        var request = new HttpRequestMessage(HttpMethod.Get, url)
-        {
-#if NETSTANDARD2_1_OR_GREATER || NETCOREAPP
-            Version = HttpVersion.Version20,
-#endif
-        };
+        var request = new HttpRequestMessage(HttpMethod.Get, url);
         request.Headers.Accept.Add(new MediaTypeWithQualityHeaderValue("text/event-stream"));
 
         HttpResponseMessage? response = null;

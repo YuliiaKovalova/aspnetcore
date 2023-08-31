@@ -52,20 +52,9 @@ internal sealed partial class WebHost : IWebHost, IAsyncDisposable
         IConfiguration config,
         AggregateException? hostingStartupErrors)
     {
-        if (appServices == null)
-        {
-            throw new ArgumentNullException(nameof(appServices));
-        }
-
-        if (hostingServiceProvider == null)
-        {
-            throw new ArgumentNullException(nameof(hostingServiceProvider));
-        }
-
-        if (config == null)
-        {
-            throw new ArgumentNullException(nameof(config));
-        }
+        ArgumentNullException.ThrowIfNull(appServices);
+        ArgumentNullException.ThrowIfNull(hostingServiceProvider);
+        ArgumentNullException.ThrowIfNull(config);
 
         _config = config;
         _hostingStartupErrors = hostingStartupErrors;
@@ -152,7 +141,8 @@ internal sealed partial class WebHost : IWebHost, IAsyncDisposable
         var activitySource = _applicationServices.GetRequiredService<ActivitySource>();
         var propagator = _applicationServices.GetRequiredService<DistributedContextPropagator>();
         var httpContextFactory = _applicationServices.GetRequiredService<IHttpContextFactory>();
-        var hostingApp = new HostingApplication(application, _logger, diagnosticSource, activitySource, propagator, httpContextFactory);
+        var hostingMetrics = _applicationServices.GetRequiredService<HostingMetrics>();
+        var hostingApp = new HostingApplication(application, _logger, diagnosticSource, activitySource, propagator, httpContextFactory, HostingEventSource.Log, hostingMetrics);
         await Server.StartAsync(hostingApp, cancellationToken).ConfigureAwait(false);
         _startedServer = true;
 

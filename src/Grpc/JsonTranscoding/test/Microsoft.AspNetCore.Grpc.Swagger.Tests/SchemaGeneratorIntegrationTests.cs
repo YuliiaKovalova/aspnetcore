@@ -38,11 +38,13 @@ public class SchemaGeneratorIntegrationTests
         var enumSchema = repository.Schemas[schema.Properties["enumValue"].Reference.Id];
         Assert.Equal("string", enumSchema.Type);
         Assert.Equal(5, enumSchema.Enum.Count);
-        Assert.Equal("NESTED_ENUM_UNSPECIFIED", ((OpenApiString)enumSchema.Enum[0]).Value);
-        Assert.Equal("FOO", ((OpenApiString)enumSchema.Enum[1]).Value);
-        Assert.Equal("BAR", ((OpenApiString)enumSchema.Enum[2]).Value);
-        Assert.Equal("BAZ", ((OpenApiString)enumSchema.Enum[3]).Value);
-        Assert.Equal("NEG", ((OpenApiString)enumSchema.Enum[4]).Value);
+
+        var enumValues = enumSchema.Enum.Select(e => ((OpenApiString)e).Value).ToList();
+        Assert.Contains("NEG", enumValues);
+        Assert.Contains("NESTED_ENUM_UNSPECIFIED", enumValues);
+        Assert.Contains("FOO", enumValues);
+        Assert.Contains("BAR", enumValues);
+        Assert.Contains("BAZ", enumValues);
     }
 
     [Fact]
@@ -165,5 +167,18 @@ public class SchemaGeneratorIntegrationTests
         Assert.Equal("object", schema.Properties["mapValue"].Type);
         Assert.Equal("number", schema.Properties["mapValue"].AdditionalProperties.Type);
         Assert.Equal("double", schema.Properties["mapValue"].AdditionalProperties.Format);
+    }
+
+    [Fact]
+    public void GenerateSchema_FieldMask_ReturnSchema()
+    {
+        // Arrange & Act
+        var (schema, repository) = GenerateSchema(typeof(FieldMaskMessage));
+
+        // Assert
+        schema = repository.Schemas[schema.Reference.Id];
+        Assert.Equal("object", schema.Type);
+        Assert.Equal(1, schema.Properties.Count);
+        Assert.Equal("string", schema.Properties["fieldMaskValue"].Type);
     }
 }

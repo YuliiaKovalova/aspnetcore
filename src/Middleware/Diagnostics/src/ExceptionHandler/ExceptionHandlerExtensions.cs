@@ -2,6 +2,7 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 using System.Diagnostics;
+using System.Diagnostics.Metrics;
 using Microsoft.AspNetCore.Diagnostics;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Routing;
@@ -24,10 +25,7 @@ public static class ExceptionHandlerExtensions
     /// <returns></returns>
     public static IApplicationBuilder UseExceptionHandler(this IApplicationBuilder app)
     {
-        if (app == null)
-        {
-            throw new ArgumentNullException(nameof(app));
-        }
+        ArgumentNullException.ThrowIfNull(app);
 
         return SetExceptionHandlerMiddleware(app, options: null);
     }
@@ -41,10 +39,7 @@ public static class ExceptionHandlerExtensions
     /// <returns></returns>
     public static IApplicationBuilder UseExceptionHandler(this IApplicationBuilder app, string errorHandlingPath)
     {
-        if (app == null)
-        {
-            throw new ArgumentNullException(nameof(app));
-        }
+        ArgumentNullException.ThrowIfNull(app);
 
         return app.UseExceptionHandler(new ExceptionHandlerOptions
         {
@@ -61,14 +56,8 @@ public static class ExceptionHandlerExtensions
     /// <returns></returns>
     public static IApplicationBuilder UseExceptionHandler(this IApplicationBuilder app, Action<IApplicationBuilder> configure)
     {
-        if (app == null)
-        {
-            throw new ArgumentNullException(nameof(app));
-        }
-        if (configure == null)
-        {
-            throw new ArgumentNullException(nameof(configure));
-        }
+        ArgumentNullException.ThrowIfNull(app);
+        ArgumentNullException.ThrowIfNull(configure);
 
         var subAppBuilder = app.New();
         configure(subAppBuilder);
@@ -89,14 +78,8 @@ public static class ExceptionHandlerExtensions
     /// <returns></returns>
     public static IApplicationBuilder UseExceptionHandler(this IApplicationBuilder app, ExceptionHandlerOptions options)
     {
-        if (app == null)
-        {
-            throw new ArgumentNullException(nameof(app));
-        }
-        if (options == null)
-        {
-            throw new ArgumentNullException(nameof(options));
-        }
+        ArgumentNullException.ThrowIfNull(app);
+        ArgumentNullException.ThrowIfNull(options);
 
         var iOptions = Options.Create(options);
         return SetExceptionHandlerMiddleware(app, iOptions);
@@ -115,6 +98,8 @@ public static class ExceptionHandlerExtensions
             {
                 var loggerFactory = app.ApplicationServices.GetRequiredService<ILoggerFactory>();
                 var diagnosticListener = app.ApplicationServices.GetRequiredService<DiagnosticListener>();
+                var exceptionHandlers = app.ApplicationServices.GetRequiredService<IEnumerable<IExceptionHandler>>();
+                var meterFactory = app.ApplicationServices.GetRequiredService<IMeterFactory>();
 
                 if (options is null)
                 {
@@ -128,7 +113,7 @@ public static class ExceptionHandlerExtensions
                     options.Value.ExceptionHandler = newNext;
                 }
 
-                return new ExceptionHandlerMiddlewareImpl(next, loggerFactory, options, diagnosticListener, problemDetailsService).Invoke;
+                return new ExceptionHandlerMiddlewareImpl(next, loggerFactory, options, diagnosticListener, exceptionHandlers, meterFactory, problemDetailsService).Invoke;
             });
         }
 

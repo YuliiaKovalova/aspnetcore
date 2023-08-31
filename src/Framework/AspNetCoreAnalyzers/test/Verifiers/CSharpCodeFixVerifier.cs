@@ -31,7 +31,7 @@ public static partial class CSharpCodeFixVerifier<TAnalyzer, TCodeFix>
     {
         var test = new CSharpCodeFixTest<TAnalyzer, TCodeFix, XUnitVerifier>
         {
-            TestCode = source,
+            TestCode = source.ReplaceLineEndings(),
             // We need to set the output type to an exe to properly
             // support top-level programs in the tests. Otherwise,
             // the test infra will assume we are trying to build a library.
@@ -52,17 +52,19 @@ public static partial class CSharpCodeFixVerifier<TAnalyzer, TCodeFix>
         => await VerifyCodeFixAsync(source, new[] { expected }, fixedSource);
 
     /// <inheritdoc cref="CodeFixVerifier{TAnalyzer, TCodeFix, TTest, TVerifier}.VerifyCodeFixAsync(string, DiagnosticResult[], string)"/>
-    public static async Task VerifyCodeFixAsync(string source, DiagnosticResult[] expected, string fixedSource, int? expectedIterations = null, string usageSource = null)
+    public static async Task VerifyCodeFixAsync(string source, DiagnosticResult[] expected, string fixedSource, int? expectedIterations = null, string usageSource = null, string codeActionEquivalenceKey = null)
     {
         var test = new CSharpCodeFixTest<TAnalyzer, TCodeFix, XUnitVerifier>
         {
             // We need to set the output type to an exe to properly
             // support top-level programs in the tests. Otherwise,
             // the test infra will assume we are trying to build a library.
-            TestState = { Sources = { source }, OutputKind = OutputKind.ConsoleApplication },
-            FixedState = { Sources = { fixedSource } },
+            TestState = { Sources = { source.ReplaceLineEndings() }, OutputKind = OutputKind.ConsoleApplication },
+            FixedState = { Sources = { fixedSource.ReplaceLineEndings() } },
             ReferenceAssemblies = CSharpAnalyzerVerifier<TAnalyzer>.GetReferenceAssemblies(),
             NumberOfFixAllIterations = expectedIterations,
+            CodeActionEquivalenceKey = codeActionEquivalenceKey,
+            CodeFixTestBehaviors = CodeFixTestBehaviors.SkipLocalDiagnosticCheck,
         };
 
         if (usageSource != null)

@@ -1,5 +1,5 @@
 #nullable enable
-Microsoft.AspNetCore.Diagnostics.StatusCodeReExecuteFeature.Endpoint.get -> Microsoft.AspNetCore.Http.Endpoint?
-Microsoft.AspNetCore.Diagnostics.StatusCodeReExecuteFeature.Endpoint.set -> void
-Microsoft.AspNetCore.Diagnostics.StatusCodeReExecuteFeature.RouteValues.get -> Microsoft.AspNetCore.Routing.RouteValueDictionary?
-Microsoft.AspNetCore.Diagnostics.StatusCodeReExecuteFeature.RouteValues.set -> void
+Microsoft.AspNetCore.Diagnostics.IExceptionHandler
+Microsoft.AspNetCore.Diagnostics.IExceptionHandler.TryHandleAsync(Microsoft.AspNetCore.Http.HttpContext! httpContext, System.Exception! exception, System.Threading.CancellationToken cancellationToken) -> System.Threading.Tasks.ValueTask<bool>
+Microsoft.AspNetCore.Diagnostics.StatusCodeReExecuteFeature.OriginalStatusCode.get -> int
+static Microsoft.Extensions.DependencyInjection.ExceptionHandlerServiceCollectionExtensions.AddExceptionHandler<T>(this Microsoft.Extensions.DependencyInjection.IServiceCollection! services) -> Microsoft.Extensions.DependencyInjection.IServiceCollection!

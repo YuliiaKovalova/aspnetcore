@@ -1,4 +1,11 @@
 #nullable enable
-Microsoft.AspNetCore.SignalR.Protocol.RawResult
-Microsoft.AspNetCore.SignalR.Protocol.RawResult.RawResult(System.Buffers.ReadOnlySequence<byte> rawBytes) -> void
-Microsoft.AspNetCore.SignalR.Protocol.RawResult.RawSerializedData.get -> System.Buffers.ReadOnlySequence<byte>
+const Microsoft.AspNetCore.SignalR.Protocol.HubProtocolConstants.AckMessageType = 8 -> int
+const Microsoft.AspNetCore.SignalR.Protocol.HubProtocolConstants.SequenceMessageType = 9 -> int
+Microsoft.AspNetCore.SignalR.Protocol.AckMessage
+Microsoft.AspNetCore.SignalR.Protocol.AckMessage.AckMessage(long sequenceId) -> void
+Microsoft.AspNetCore.SignalR.Protocol.AckMessage.SequenceId.get -> long
+Microsoft.AspNetCore.SignalR.Protocol.AckMessage.SequenceId.set -> void
+Microsoft.AspNetCore.SignalR.Protocol.SequenceMessage
+Microsoft.AspNetCore.SignalR.Protocol.SequenceMessage.SequenceId.get -> long
+Microsoft.AspNetCore.SignalR.Protocol.SequenceMessage.SequenceId.set -> void
+Microsoft.AspNetCore.SignalR.Protocol.SequenceMessage.SequenceMessage(long sequenceId) -> void

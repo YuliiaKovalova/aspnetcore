@@ -40,10 +40,7 @@ public class BufferedReadStream : Stream
     /// <param name="bytePool">ArrayPool for the buffer.</param>
     public BufferedReadStream(Stream inner, int bufferSize, ArrayPool<byte> bytePool)
     {
-        if (inner == null)
-        {
-            throw new ArgumentNullException(nameof(inner));
-        }
+        ArgumentNullException.ThrowIfNull(inner);
 
         _inner = inner;
         _bytePool = bytePool;
@@ -413,7 +410,7 @@ public class BufferedReadStream : Stream
     {
         // Drop the final CRLF, if any
         var length = foundCRLF ? builder.Length - 2 : builder.Length;
-        return Encoding.UTF8.GetString(builder.ToArray(), 0, (int)length);
+        return Encoding.UTF8.GetString(builder.GetBuffer(), 0, (int)length);
     }
 
     private void CheckDisposed()

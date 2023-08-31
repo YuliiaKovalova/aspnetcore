@@ -1,23 +1,14 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
-using System;
-using System.Collections.Generic;
-using System.Globalization;
-using System.IO;
-using System.Text;
 using Microsoft.AspNetCore.Testing;
 using Microsoft.Extensions.Configuration.UserSecrets;
 using Microsoft.Extensions.Tools.Internal;
-using Microsoft.AspNetCore.Authentication.JwtBearer.Tools;
-using Xunit;
 using Xunit.Abstractions;
 using System.Text.RegularExpressions;
 using System.Text.Json;
 using System.Text.Json.Nodes;
 using System.IdentityModel.Tokens.Jwt;
-using System.Reflection;
-using System.Numerics;
 
 namespace Microsoft.AspNetCore.Authentication.JwtBearer.Tools.Tests;
 
@@ -81,6 +72,25 @@ public class UserJwtsTests : IClassFixture<UserJwtsTestFixture>
     }
 
     [Fact]
+    public void Create_CanModifyExistingScheme()
+    {
+        var project = Path.Combine(_fixture.CreateProject(), "TestProject.csproj");
+        var appsettings = Path.Combine(Path.GetDirectoryName(project), "appsettings.Development.json");
+        var app = new Program(_console);
+
+        app.Run(new[] { "create", "--project", project });
+        Assert.Contains("New JWT saved", _console.GetOutput());
+        var matches = Regex.Matches(_console.GetOutput(), "New JWT saved with ID '(.*?)'");
+        var id = matches.SingleOrDefault().Groups[1].Value;
+
+        var appSettings = JsonSerializer.Deserialize<JsonObject>(File.ReadAllText(appsettings));
+        Assert.Equal("dotnet-user-jwts", appSettings["Authentication"]["Schemes"]["Bearer"]["ValidIssuer"].GetValue<string>());
+        app.Run(new[] { "create", "--project", project, "--issuer", "new-issuer"  });
+        appSettings = JsonSerializer.Deserialize<JsonObject>(File.ReadAllText(appsettings));
+        Assert.Equal("new-issuer", appSettings["Authentication"]["Schemes"]["Bearer"]["ValidIssuer"].GetValue<string>());
+    }
+
+    [Fact]
     public void Print_ReturnsNothingForMissingToken()
     {
         var project = Path.Combine(_fixture.CreateProject(), "TestProject.csproj");
@@ -94,7 +104,6 @@ public class UserJwtsTests : IClassFixture<UserJwtsTestFixture>
     public void List_ReturnsIdForGeneratedToken()
     {
         var project = Path.Combine(_fixture.CreateProject(), "TestProject.csproj");
-        var appsettings = Path.Combine(Path.GetDirectoryName(project), "appsettings.Development.json");
         var app = new Program(_console);
 
         app.Run(new[] { "create", "--project", project, "--scheme", "MyCustomScheme" });
@@ -102,6 +111,40 @@ public class UserJwtsTests : IClassFixture<UserJwtsTestFixture>
 
         app.Run(new[] { "list", "--project", project });
         Assert.Contains("MyCustomScheme", _console.GetOutput());
+    }
+
+    [Fact]
+    public void List_ReturnsIdForGeneratedToken_WithJsonFormat()
+    {
+        var schemeName = "MyCustomScheme";
+        var project = Path.Combine(_fixture.CreateProject(), "TestProject.csproj");
+        var app = new Program(_console);
+
+        app.Run(new[] { "create", "--project", project, "--scheme", schemeName });
+        var matches = Regex.Matches(_console.GetOutput(), "New JWT saved with ID '(.*?)'");
+        var id = matches.SingleOrDefault().Groups[1].Value;
+        _console.ClearOutput();
+
+        app.Run(new[] { "list", "--project", project, "--output", "json" });
+        var output = _console.GetOutput();
+        var deserialized = JsonSerializer.Deserialize<Dictionary<string, Jwt>>(output);
+
+        var jwt = deserialized[id];
+
+        Assert.NotNull(deserialized);
+        Assert.Equal(schemeName, jwt.Scheme);
+    }
+
+    [Fact]
+    public void List_ReturnsEmptyListWhenNoTokens_WithJsonFormat()
+    {
+        var project = Path.Combine(_fixture.CreateProject(), "TestProject.csproj");
+        var app = new Program(_console);
+
+        app.Run(new[] { "list", "--project", project, "--output", "json" });
+        var output = _console.GetOutput();
+
+        Assert.Equal("[]", output.Trim());
     }
 
     [Fact]
@@ -267,6 +310,26 @@ public class UserJwtsTests : IClassFixture<UserJwtsTestFixture>
         Assert.Contains($"Name: {Environment.UserName}", output);
         Assert.Contains($"Scheme: {DevJwtsDefaults.Scheme}", output);
         Assert.Contains($"Audience(s): http://localhost:23528, https://localhost:44395, https://localhost:5001, http://localhost:5000", output);
+    }
+
+    [Fact]
+    public void PrintCommand_ShowsBasicOptions_WithJsonFormat()
+    {
+        var project = Path.Combine(_fixture.CreateProject(), "TestProject.csproj");
+        var app = new Program(_console);
+
+        app.Run(new[] { "create", "--project", project });
+        var matches = Regex.Matches(_console.GetOutput(), "New JWT saved with ID '(.*?)'");
+        var id = matches.SingleOrDefault().Groups[1].Value;
+        _console.ClearOutput();
+
+        app.Run(new[] { "print", id, "--project", project, "--output", "json" });
+        var output = _console.GetOutput();
+        var deserialized = JsonSerializer.Deserialize<Jwt>(output);
+
+        Assert.Equal(Environment.UserName, deserialized.Name);
+        Assert.Equal(DevJwtsDefaults.Scheme, deserialized.Scheme);
+        Assert.Equal($"http://localhost:23528, https://localhost:44395, https://localhost:5001, http://localhost:5000", deserialized.Audience);
     }
 
     [Fact]
@@ -541,7 +604,7 @@ public class UserJwtsTests : IClassFixture<UserJwtsTestFixture>
         var app = new Program(_console);
         app.Run(new[] { "create" });
 
-        Assert.Contains("No project found at `-p|--project` path or current directory.", _console.GetOutput());
+        Assert.Contains($"Could not find a MSBuild project file in '{Directory.GetCurrentDirectory()}'. Specify which project to use with the --project option.", _console.GetOutput());
         Assert.DoesNotContain(Resources.CreateCommand_NoAudience_Error, _console.GetOutput());
     }
 
@@ -554,7 +617,7 @@ public class UserJwtsTests : IClassFixture<UserJwtsTestFixture>
         var app = new Program(_console);
         app.Run(new[] { "remove", "some-id" });
 
-        Assert.Contains("No project found at `-p|--project` path or current directory.", _console.GetOutput());
+        Assert.Contains($"Could not find a MSBuild project file in '{Directory.GetCurrentDirectory()}'. Specify which project to use with the --project option.", _console.GetOutput());
     }
 
     [Fact]
@@ -566,7 +629,7 @@ public class UserJwtsTests : IClassFixture<UserJwtsTestFixture>
         var app = new Program(_console);
         app.Run(new[] { "clear" });
 
-        Assert.Contains("No project found at `-p|--project` path or current directory.", _console.GetOutput());
+        Assert.Contains($"Could not find a MSBuild project file in '{Directory.GetCurrentDirectory()}'. Specify which project to use with the --project option.", _console.GetOutput());
     }
 
     [Fact]
@@ -578,7 +641,19 @@ public class UserJwtsTests : IClassFixture<UserJwtsTestFixture>
         var app = new Program(_console);
         app.Run(new[] { "list" });
 
-        Assert.Contains("No project found at `-p|--project` path or current directory.", _console.GetOutput());
+        Assert.Contains($"Could not find a MSBuild project file in '{Directory.GetCurrentDirectory()}'. Specify which project to use with the --project option.", _console.GetOutput());
+    }
+
+    [Fact]
+    public void List_CanHandleProjectOptionAsPath()
+    {
+        var projectPath = _fixture.CreateProject();
+        var project = Path.Combine(projectPath, "TestProject.csproj");
+
+        var app = new Program(_console);
+        app.Run(new[] { "list", "--project", projectPath });
+
+        Assert.Contains(Path.Combine(projectPath, project), _console.GetOutput());
     }
 
     [ConditionalFact]

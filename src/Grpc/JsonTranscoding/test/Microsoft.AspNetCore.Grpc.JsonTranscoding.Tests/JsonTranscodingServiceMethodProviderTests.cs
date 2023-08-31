@@ -69,6 +69,25 @@ public class JsonTranscodingServiceMethodProviderTests
     }
 
     [Fact]
+    public void AddMethod_PatternVerb_RouteEndsWithVerb()
+    {
+        // Arrange & Act
+        var endpoints = MapEndpoints<JsonTranscodingColonRouteService>();
+
+        var startFrameImport = Assert.Single(FindGrpcEndpoints(endpoints, nameof(JsonTranscodingColonRouteService.StartFrameImport)));
+        var getFrameImport = Assert.Single(FindGrpcEndpoints(endpoints, nameof(JsonTranscodingColonRouteService.GetFrameImport)));
+
+        // Assert
+        Assert.Equal("POST", startFrameImport.Metadata.GetMetadata<IHttpMethodMetadata>()?.HttpMethods.Single());
+        Assert.Equal("/v1/frames:startFrameImport", startFrameImport.Metadata.GetMetadata<GrpcJsonTranscodingMetadata>()?.HttpRule.Post);
+        Assert.Equal("/v1/frames:startFrameImport", startFrameImport.RoutePattern.RawText);
+
+        Assert.Equal("POST", getFrameImport.Metadata.GetMetadata<IHttpMethodMetadata>()?.HttpMethods.Single());
+        Assert.Equal("/v1/frames:getFrameImport", getFrameImport.Metadata.GetMetadata<GrpcJsonTranscodingMetadata>()?.HttpRule.Post);
+        Assert.Equal("/v1/frames:getFrameImport", getFrameImport.RoutePattern.RawText);
+    }
+
+    [Fact]
     public void AddMethod_NoHttpRuleInProto_ThrowNotFoundError()
     {
         // Arrange & Act
@@ -247,9 +266,9 @@ public class JsonTranscodingServiceMethodProviderTests
         {
             configureLogging?.Invoke(log);
         });
-        serviceCollection.AddGrpc();
+        var builder = serviceCollection.AddGrpc();
         serviceCollection.RemoveAll(typeof(IServiceMethodProvider<>));
-        serviceCollection.TryAddEnumerable(ServiceDescriptor.Singleton(typeof(IServiceMethodProvider<>), typeof(JsonTranscodingServiceMethodProvider<>)));
+        builder.AddJsonTranscoding();
 
         IEndpointRouteBuilder endpointRouteBuilder = new TestEndpointRouteBuilder(serviceCollection.BuildServiceProvider());
 

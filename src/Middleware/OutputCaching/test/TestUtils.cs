@@ -2,7 +2,6 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 #nullable enable
-using System;
 using System.Net.Http;
 using System.Text;
 using Microsoft.AspNetCore.Builder;
@@ -77,6 +76,16 @@ internal class TestUtils
         return Task.CompletedTask;
     }
 
+    internal static async Task TestRequestDelegatePipeWriteAsync(HttpContext context)
+    {
+        var uniqueId = Guid.NewGuid().ToString();
+        if (TestRequestDelegate(context, uniqueId))
+        {
+            Encoding.UTF8.GetBytes(uniqueId, context.Response.BodyWriter);
+            await context.Response.BodyWriter.FlushAsync();
+        }
+    }
+
     internal static IOutputCacheKeyProvider CreateTestKeyProvider()
     {
         return CreateTestKeyProvider(new OutputCacheOptions());
@@ -109,6 +118,11 @@ internal class TestUtils
                 contextAction?.Invoke(context);
                 return TestRequestDelegateSendFileAsync(context);
             },
+            context =>
+            {
+                contextAction?.Invoke(context);
+                return TestRequestDelegatePipeWriteAsync(context);
+            },
         });
     }
 
@@ -125,8 +139,9 @@ internal class TestUtils
         {
             requestDelegates = new RequestDelegate[]
             {
-                    TestRequestDelegateWriteAsync,
-                    TestRequestDelegateWrite
+                TestRequestDelegateWriteAsync,
+                TestRequestDelegateWrite,
+                TestRequestDelegatePipeWriteAsync,
             };
         }
 
@@ -146,7 +161,7 @@ internal class TestUtils
                             {
                                 outputCachingOptions.MaximumBodySize = options.MaximumBodySize;
                                 outputCachingOptions.UseCaseSensitivePaths = options.UseCaseSensitivePaths;
-                                outputCachingOptions.SystemClock = options.SystemClock;
+                                outputCachingOptions.TimeProvider = options.TimeProvider;
                                 outputCachingOptions.BasePolicies = options.BasePolicies;
                                 outputCachingOptions.DefaultExpirationTimeSpan = options.DefaultExpirationTimeSpan;
                                 outputCachingOptions.SizeLimit = options.SizeLimit;
@@ -345,11 +360,6 @@ internal class TestOutputCache : IOutputCacheStore
             return ValueTask.CompletedTask;
         }
     }
-}
-
-internal class TestClock : ISystemClock
-{
-    public DateTimeOffset UtcNow { get; set; }
 }
 
 internal class AllowTestPolicy : IOutputCachePolicy
